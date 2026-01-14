@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NGB-DO Excel Pro</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <style>
+        /* शानदार बैकग्राउंड कलर */
+        body { 
+            font-family: 'Segoe UI', Roboto, sans-serif; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100vh; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            margin: 0; 
+            overflow: hidden;
+        }
+
+        .container { 
+            background: white; 
+            padding: 50px; 
+            border-radius: 20px; 
+            box-shadow: 0 20px 50px rgba(0,0,0,0.2); 
+            text-align: center; 
+            width: 550px; 
+            transition: transform 0.3s ease;
+        }
+
+        /* Animate करने वाला Header */
+        h1 { 
+            color: #000; 
+            font-size: 28px; 
+            font-weight: bold; 
+            border: 4px solid #007bff; 
+            display: inline-block; 
+            padding: 10px 25px; 
+            border-radius: 10px;
+            animation: borderGlow 2s infinite alternate;
+            margin-bottom: 35px;
+        }
+
+        @keyframes borderGlow {
+            0% { box-shadow: 0 0 5px #007bff; border-color: #007bff; }
+            100% { box-shadow: 0 0 25px #007bff; border-color: #00d4ff; }
+        }
+
+        /* Standard Text for File Input */
+        .file-label {
+            font-weight: 600;
+            color: #444;
+            display: block;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        input[type="file"] { 
+            margin-bottom: 25px; 
+            width: 100%; 
+            padding: 12px; 
+            border: 2px solid #ddd; 
+            border-radius: 8px;
+            cursor: pointer;
+            background: #f9f9f9;
+            transition: all 0.3s;
+        }
+
+        input[type="file"]:active { transform: scale(0.95); }
+
+        .options { 
+            margin: 25px 0; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: flex-start; 
+            gap: 15px; 
+            background: #f0f4f8; 
+            padding: 20px; 
+            border-radius: 12px;
+        }
+
+        /* Buttons with Popup Animation */
+        .btn-combine { 
+            background-color: #000000; 
+            color: white; 
+            border: none; 
+            padding: 16px; 
+            font-size: 18px; 
+            font-weight: bold; 
+            border-radius: 10px; 
+            cursor: pointer; 
+            width: 100%; 
+            transition: all 0.2s;
+            text-transform: uppercase;
+        }
+
+        .btn-combine:active, #downloadBtn:active {
+            transform: scale(1.1); /* Click करने पर Popup effect */
+        }
+
+        #downloadBtn { 
+            display: none; 
+            background-color: #0052cc; 
+            color: white; 
+            border: none; 
+            padding: 16px; 
+            font-size: 18px; 
+            font-weight: bold; 
+            border-radius: 10px; 
+            cursor: pointer; 
+            width: 100%; 
+            margin-top: 25px; 
+            text-decoration: none; 
+            text-align: center; 
+            box-sizing: border-box; 
+            transition: all 0.2s;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        #status { margin-top: 20px; font-size: 15px; color: #2ecc71; font-weight: bold; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Combine Your Data</h1>
+    
+    <label class="file-label">Choose Your Excel Files:</label>
+    <input type="file" id="fileInput" multiple accept=".xlsx, .xls">
+
+    <div class="options">
+        <label><input type="radio" name="mode" value="single" checked> Combine in One Sheet</label>
+        <label><input type="radio" name="mode" value="multiple"> Combine in Multiple Sheet in Work Book</label>
+    </div>
+
+    <button class="btn-combine" onclick="processFiles()">Combine Now</button>
+
+    <a id="downloadBtn">Download Now</a>
+    <div id="status"></div>
+</div>
+
+<script>
+    const finalHeaders = [
+        "S.No.", "Bill Month", "Location Code", "Group No", "Reading Diary No", "Consumer No", 
+        "Consumer Name", "Address1", "Address2", "Mobile No", "Tariff Category", 
+        "Tariff Code", "Feeder Code", "DTR Code", "Sanctioned Load", "Sanctioned Load Unit", 
+        "Connection Type", "Purpose", "Current reading", "Billed Unit", "Meter Identifier", 
+        "S.D. Held", "Current Bill", "Arrear", "Net Bill", "Due Date", "Surcharge", 
+        "Amount Payable", "Last Payment Date", "Last Payment Amount", "Is Prepaid"
+    ];
+
+    function getFormattedDate() {
+        const today = new Date();
+        const dd = String(today.getDate()).padStart(2, '0');
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const yyyy = today.getFullYear();
+        return `${dd}-${mm}-${yyyy}`;
+    }
+
+    async function processFiles() {
+        const fileInput = document.getElementById('fileInput');
+        const status = document.getElementById('status');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const mode = document.querySelector('input[name="mode"]:checked').value;
+
+        if (fileInput.files.length === 0) {
+            alert("Please select files!");
+            return;
+        }
+
+        status.innerText = "Processing Data... Adding 'N' to Consumer Nos...";
+        downloadBtn.style.display = "none";
+
+        const newWb = XLSX.utils.book_new();
+        const currentDate = getFormattedDate();
+        const customName = `NGB-DO_(${currentDate})`;
+
+        let masterRows = [finalHeaders]; 
+        let globalSerial = 1;
+
+        for (let i = 0; i < fileInput.files.length; i++) {
+            const data = await fileInput.files[i].arrayBuffer();
+            const workbook = XLSX.read(data);
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+            rawData.forEach(row => {
+                if (!row || row.length < 5) return;
+                const rowStr = row.join(" ");
+                
+                if (rowStr.includes("Madhya Pradesh Paschim") || 
+                    rowStr.includes("Instant Bill") || 
+                    rowStr.includes("Due Date Upto") || 
+                    rowStr.includes("Bill Month")) {
+                    return; 
+                }
+
+                // Consumer No (Index 4) -> Add 'N'
+                if (row[4]) {
+                    let cNo = row[4].toString().trim();
+                    if (!cNo.startsWith('N')) {
+                        row[4] = 'N' + cNo;
+                    }
+                }
+
+                masterRows.push([globalSerial++, ...row]);
+            });
+        }
+
+        if (mode === "single") {
+            const masterWs = XLSX.utils.aoa_to_sheet(masterRows);
+            XLSX.utils.book_append_sheet(newWb, masterWs, customName);
+        }
+
+        const wbout = XLSX.write(newWb, { bookType: 'xlsx', type: 'binary' });
+        const blob = new Blob([s2ab(wbout)], { type: "application/octet-stream" });
+        const url = URL.createObjectURL(blob);
+        
+        status.innerText = "Task Completed Successfully!";
+        downloadBtn.href = url;
+        downloadBtn.download = `${customName}.xlsx`;
+        downloadBtn.style.display = "block";
+    }
+
+    function s2ab(s) {
+        const buf = new ArrayBuffer(s.length);
+        const view = new Uint8Array(buf);
+        for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xFF;
+        return buf;
+    }
+</script>
+
+</body>
+</html>
